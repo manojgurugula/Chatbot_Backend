@@ -8,13 +8,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
-
 import java.net.URI;
 import java.net.http.*;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-
 
 @RestController
 @RequestMapping("/api")
@@ -98,8 +96,17 @@ public class ChatController {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Groq API error: " + response.body());
         }
 
-        // Parse and return the JSON response as a Map
-        return mapper.readValue(response.body(), Map.class);
+        // Parse Groq response JSON and extract assistant reply
+        Map<String, Object> parsed = mapper.readValue(response.body(), Map.class);
+        String assistantText = extractAssistantText(parsed);
+
+        // If we couldn't extract any content, return a friendly fallback message
+        if (assistantText == null || assistantText.isBlank()) {
+            assistantText = "No reply from model (empty response).";
+        }
+
+        // Return only the assistant text to the frontend
+        return Map.of("response", assistantText);
     }
 
     @GetMapping("/health")
@@ -125,5 +132,48 @@ public class ChatController {
             throw new ResponseStatusException(HttpStatus.valueOf(resp.statusCode()), "Groq models error: " + resp.body());
         }
         return mapper.readValue(resp.body(), Map.class);
+    }
+
+    /**
+     * Helper: safely extract assistant text from Groq/OpenAI-like response Map.
+     * Supports:
+     *  - choices[0].message.content
+     *  - choices[0].text (older style)
+     */
+    private String extractAssistantText(Map<String, Object> parsed) {
+        if (parsed == null) return null;
+
+        try {
+            Object choicesObj = parsed.get("choices");
+            if (choicesObj instanceof List<?> choices && !choices.isEmpty()) {
+                Object first = choices.get(0);
+                if (first instanceof Map<?, ?> firstMap) {
+                    // Try message.content
+                    Object messageObj = firstMap.get("message");
+                    if (messageObj instanceof Map<?, ?> messageMap) {
+                        Object contentObj = messageMap.get("content");
+                        if (contentObj instanceof String) {
+                            return (String) contentObj;
+                        }
+                    }
+                    // Fallback: choice.text
+                    Object textObj = firstMap.get("text");
+                    if (textObj instanceof String) {
+                        return (String) textObj;
+                    }
+                }
+            }
+
+            // Some providers may put the text directly in "text" or other fields
+            Object textRoot = parsed.get("text");
+            if (textRoot instanceof String) {
+                return (String) textRoot;
+            }
+        } catch (Exception e) {
+            // swallow parse errors and return null - main code will handle fallback
+            System.err.println("Failed to extract assistant text: " + e.getMessage());
+        }
+
+        return null;
     }
 }
