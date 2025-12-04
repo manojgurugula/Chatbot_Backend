@@ -37,7 +37,7 @@ public class ChatController {
             .connectTimeout(Duration.ofSeconds(30))
             .build();
 
-    @CrossOrigin(origins = "${app.cors.allowedOrigins}")
+    @CrossOrigin(origins = "*", methods = {RequestMethod.POST, RequestMethod.OPTIONS})
     @PostMapping("/chat")
     public Map<String, Object> chat(@RequestBody ChatRequest request) throws Exception {
         // Basic rate limiting
@@ -73,8 +73,14 @@ public class ChatController {
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
-        // Send request
-        HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+        // Send request with proper error handling
+        HttpResponse<String> response;
+        try {
+            response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+        } catch (Exception e) {
+            System.err.println("Error sending request to Groq: " + e.getMessage());
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to connect to AI service");
+        }
 
         // Log for debugging (Render logs)
         System.out.println("Groq returned status: " + response.statusCode());
@@ -97,16 +103,22 @@ public class ChatController {
         }
 
         // Parse Groq response JSON and extract assistant reply
-        Map<String, Object> parsed = mapper.readValue(response.body(), Map.class);
-        String assistantText = extractAssistantText(parsed);
+        try {
+            Map<String, Object> parsed = mapper.readValue(response.body(), Map.class);
+            String assistantText = extractAssistantText(parsed);
 
-        // If we couldn't extract any content, return a friendly fallback message
-        if (assistantText == null || assistantText.isBlank()) {
-            assistantText = "No reply from model (empty response).";
+            // If we couldn't extract any content, return a friendly fallback message
+            if (assistantText == null || assistantText.isBlank()) {
+                assistantText = "No reply from model (empty response).";
+            }
+
+            // Return only the assistant text to the frontend
+            return Map.of("response", assistantText);
+        } catch (Exception e) {
+            System.err.println("Error parsing Groq response: " + e.getMessage());
+            System.err.println("Response body: " + response.body());
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to parse AI response");
         }
-
-        // Return only the assistant text to the frontend
-        return Map.of("response", assistantText);
     }
 
     @GetMapping("/health")
