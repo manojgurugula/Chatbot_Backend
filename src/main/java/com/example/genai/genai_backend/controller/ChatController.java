@@ -25,9 +25,9 @@ public class ChatController {
     // Read model from application.properties -> env var GROQ_MODEL
     @Value("${groq.model:meta-llama/llama-4-maverick-17b-128e-instruct}")
     private String groqModel;
-
+// app.cors.allowedOrigins:http://localhost:5173
     // CORS origin (optional)
-    @Value("${app.cors.allowedOrigins:http://localhost:5173}")
+    @Value("${app.cors.allowedOrigins:https://chatbot-frontend-nty8.onrender.com}")
     private String allowedOrigins;
 
     private final ObjectMapper mapper = new ObjectMapper();
