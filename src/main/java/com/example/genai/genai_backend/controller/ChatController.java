@@ -27,7 +27,7 @@ public class ChatController {
     private String groqModel;
 // app.cors.allowedOrigins:http://localhost:5173
     // CORS origin (optional)
-    @Value("${app.cors.allowedOrigins:https://chatbot-frontend-nty8.onrender.com}")
+    @Value("${app.cors.allowedOrigins:http://localhost:5173}")
     private String allowedOrigins;
 
     private final ObjectMapper mapper = new ObjectMapper();
